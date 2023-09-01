@@ -1,6 +1,7 @@
 ***  Installation ***
 
-Video-Demo: https://youtu.be/uoDEp54BrjE?si=Mei5v6pgP2INVd-U
+## 🔗 Links
+[![Video](https://youtu.be/uoDEp54BrjE?si=Mei5v6pgP2INVd-U)](https://katherineoelsner.com/)
 
 install python 3.10/3.11 for your operating system using this link  https://www.python.org/downloads/
 

@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/css/bootstrap.min.css"
+          integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.22/css/jquery.dataTables.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+            integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.3/dist/umd/popper.min.js"
+            integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/js/bootstrap.min.js"
+            integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+            crossorigin="anonymous"></script>
+
+    <script src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Dashboard</title>
+</head>
+<body>
+<br>
+<div class="container mt-5" style='text-align:center;'>
+    <a href="http://127.0.0.1:8000/finra" class="btn btn-primary  btn-lg">Finra</a>
+</div>
+<br><br>
+
+<h1 style='text-align:center;'>IB Options Scanner</h1>
+
+<br><br>
+<div class="table-responsive">
+    <h2 style='text-align:center;'>Price Table</h2>
+    <table class="table table-bordered" id="priceTable"></table>
+    <br><br>
+
+    <br><br>
+    <h2 style='text-align:center;'>Greek Table</h2>
+    <table class="table table-bordered" id="greekTable"></table>
+
+    <br><br>
+    <h2 style='text-align:center;'>IV Table</h2>
+    <table class="table table-bordered" id="ivTable"></table>
+</div>
+<br></br>
+<br></br>
+<hr>
+
+
+<div class="container">
+    <div class="row">
+        <div id="chartContainer" class="col-md-12">
+            <h2 style="text-align: center;">Gamma By Each Strike / In Million</h2>
+        </div>
+    </div>
+    <br></br>
+    <hr>
+    <div class="row">
+        <div id="chartContainerProfile" class="col-md-12">
+            <h2 style="text-align: center;">Gamma Profile By Each Strike / In Million</h2>
+        </div>
+    </div>
+    <br></br>
+    <hr>
+    <div class="row">
+        <div id="chartContainerBarByExpiry" class="col-md-12">
+            <h2 style="text-align: center;">Total Gamma By Expiry</h2>
+        </div>
+    </div>
+    <br></br>
+    <hr>
+    <div class="row">
+        <div id="chartContainer_vanna" class="col-md-12">
+            <h2 style="text-align: center;">Vanna By Each Strike / In Million</h2>
+        </div>
+    </div>
+    <br></br>
+    <hr>
+    <div class="row">
+        <div id="chartContainerProfile_vanna" class="col-md-12">
+            <h2 style="text-align: center;">Vanna Profile By Each Strike / In Million</h2>
+        </div>
+    </div>
+    <br></br>
+    <hr>
+    <div class="row">
+        <div id="chartContainerBarByExpiry_vanna" class="col-md-12">
+            <h2 style="text-align: center;">Total Vanna By Expiry / In Million</h2>
+        </div>
+    </div>
+</div>
+<script>
+    var client_id = Date.now()
+    var ws = new WebSocket(`ws://localhost:8000/ws/${client_id}`);
+    var price_table=null;
+    ws.onmessage = function(event) {
+        const data=JSON.parse(event.data);
+        create_chart(data.chart_data)
+        create_chart_profile(data.profile_chart_data)
+        create_chart_bar_by_expiry(data.by_expiry_chart_data)
+        create_chart_vanna(data.chart_data_vanna)
+        create_chart_profile_vanna(data.profile_chart_data_vanna)
+        create_chart_bar_by_expiry_vanna(data.by_expiry_chart_data_vanna)
+    };
+                        
+    var create_chart=function(data){
+        var keysList = Object.keys(data);
+        for (var i=0;i<keysList.length;i++){
+            var key=keysList[i]
+            var value=data[key]
+            var chartId = key;
+            var existingChart = Chart.getChart(chartId);
+            if (existingChart) {
+            console.log(value[0])
+            existingChart.data.labels=value[0]
+            existingChart.data.datasets[0].data = value[1];
+            existingChart.data.datasets[1].data = value[2];
+            existingChart.update()
+            }
+            else{
+                var chartContainer = document.getElementById("chartContainer");
+                var newChartDiv = document.createElement("div");
+                newChartDiv.classList.add("flex-item");
+                var newChartId =chartId // Generate a unique ID for the new chart
+                newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+                chartContainer.appendChild(newChartDiv);
+                var ctx = document.getElementById(chartId)
+
+                var barChart=new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                                    {
+                                    label: 'call',
+                                    data: [],
+                                    backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                    borderWidth: 3,
+                                    barThickness: 20,
+                                    },
+                                    {
+                                    label: 'put',
+                                    data: [],
+                                    backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                    borderWidth: 1,
+                                    barThickness: 20,
+                                },
+                    ]
+                    },
+                    options: {
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    font: {
+                                        size: 20,
+                                        weight:"bold"
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: key, // Specify your header text here
+                                font: {
+                                size: 20, // Adjust the font size as needed
+                                weight: 'bold', // Specify the font weight
+                                },
+                            },
+                            },
+                        scales: {
+                        x: {stacked: true,
+                            ticks: 
+                                {
+                                    font: {
+                                        size: 20,
+                                    }
+                                }
+                        
+                        },
+                        y: {
+                            beginAtZero: true,
+                            stacked: true,
+                            ticks: 
+                                {
+                                    font: {
+                                        size: 20 ,
+                                    }
+                                },
+                        }
+                        }
+                    }
+                });
+
+                
+            }
+            }
+    }
+
+    var create_chart_profile=function(data){
+        var keysList = Object.keys(data);
+        for (var i=0;i<keysList.length;i++){
+            var key=keysList[i]
+            var value=data[key]
+            console.log('key',key)
+            console.log('value',value)
+
+            var chartId = key+'profile_chart';
+            var existingChart = Chart.getChart(chartId);
+            if (existingChart) {
+            existingChart.data.labels=value[0]
+            existingChart.data.datasets[0].data = value[1];
+            existingChart.data.datasets[1].data = value[2];
+            existingChart.update()
+            }
+            else{
+                var chartContainer = document.getElementById("chartContainerProfile");
+                var newChartDiv = document.createElement("div");
+                newChartDiv.classList.add("flex-item");
+                var newChartId =chartId // Generate a unique ID for the new chart
+                newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+                chartContainer.appendChild(newChartDiv);
+                
+
+                var ctx_profile = document.getElementById(chartId)
+                var barChart=new Chart(ctx_profile, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                                    {
+                                    label: 'call',
+                                    data: [],
+                                    backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                    borderWidth: 2,
+                                    borderColor:['rgba(0, 0, 128, 0.5)', ],
+                                    lineThickness: 5,
+                                    pointRadius: 0, // Remove the data points
+                                    pointHoverRadius: 0, 
+                                    },
+
+                                    {
+                                    label: 'put',
+                                    data: [],
+                                    backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                    borderColor:['rgba(255, 140, 0, 0.5)',],
+                                    borderWidth: 2,
+                                    lineThickness: 5,
+                                    pointRadius: 0, // Remove the data points
+                                    pointHoverRadius: 0, 
+                                },
+                    ]
+                    },
+                    options: {
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    font: {
+                                        size: 20,
+                                        weight:"bold"
+                                    }
+                                }
+                            },
+                            
+                            title: {
+                                display: true,
+                                text: key, // Specify your header text here
+                                font: {
+                                size: 20, // Adjust the font size as needed
+                                weight: 'bold', // Specify the font weight
+                                },
+                            },
+                            },
+                        scales: {
+                        x: {
+                            stacked: true,
+                            ticks: 
+                                {
+                                    font: {
+                                        size: 20 ,
+                                    }
+                                },
+                        
+                            },
+                        y: {
+                            beginAtZero: true,
+                            stacked: true,
+                            ticks: 
+                                {
+                                    font: {
+                                        size: 20 ,
+                                    }
+                                },
+                        }
+                        }
+                    }
+                });
+
+                
+            }
+        }
+    }
+
+
+    var create_chart_bar_by_expiry=function(data){
+        var keysList = Object.keys(data);
+        for (var i=0;i<keysList.length;i++){
+            var key=keysList[i]
+            var value=data[key]
+            var chartId = key+'expiry_chart';
+            var existingChart = Chart.getChart(chartId);
+            if (existingChart) {
+                console.log(value[0])
+                existingChart.data.labels=value[0]
+                existingChart.data.datasets[0].data = value[1];
+                existingChart.data.datasets[1].data = value[2];
+                existingChart.update()
+            }
+            else{
+                var chartContainer = document.getElementById("chartContainerBarByExpiry");
+                var newChartDiv = document.createElement("div");
+                newChartDiv.classList.add("flex-item");
+                var newChartId =chartId // Generate a unique ID for the new chart
+                newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+                chartContainer.appendChild(newChartDiv);
+                
+
+                var ctx = document.getElementById(chartId)
+                var barChart=new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                                    {
+                                    label: 'call',
+                                    data: [],
+                                    backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                    borderWidth: 3,
+                                    barThickness: 30,
+                                    },
+
+                                    {
+                                    label: 'put',
+                                    data: [],
+                                    backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                    borderWidth: 1,
+                                    barThickness: 30,
+                                    
+                                },
+                    ]
+                    },
+                    options: {
+                            plugins: {
+                            legend: {
+                                labels: {
+                                    font: {
+                                        size: 20,
+                                        weight:"bold"
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: key, // Specify your header text here
+                                font: {
+                                size: 20, // Adjust the font size as needed
+                                weight: 'bold', // Specify the font weight
+                                },
+                            },
+                            },
+                        scales: 
+                        {
+                        x: {
+                            stacked: true, 
+                            ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            stacked: true,
+                            ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            },
+                        }
+                        }
+                    }
+                });
+
+                
+            }
+            }
+        }
+
+
+
+
+
+    var create_chart_bar_by_expiry_vanna=function(data){
+        var keysList = Object.keys(data);
+        for (var i=0;i<keysList.length;i++){
+            var key=keysList[i]
+            var value=data[key]
+            var chartId = key+'vanna_expiry_chart';
+            var existingChart = Chart.getChart(chartId);
+            if (existingChart) {
+                console.log(value[0])
+                existingChart.data.labels=value[0]
+                existingChart.data.datasets[0].data = value[1];
+                existingChart.data.datasets[1].data = value[2];
+                existingChart.update()
+            }
+            else{
+                var chartContainer = document.getElementById("chartContainerBarByExpiry_vanna");
+                var newChartDiv = document.createElement("div");
+                newChartDiv.classList.add("flex-item");
+                var newChartId =chartId // Generate a unique ID for the new chart
+                newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+                chartContainer.appendChild(newChartDiv);
+                
+
+                var ctx = document.getElementById(chartId)
+                var barChart=new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                                    {
+                                    label: 'call',
+                                    data: [],
+                                    backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                    borderWidth: 3,
+                                    barThickness: 30,
+                                    },
+
+                                    {
+                                    label: 'put',
+                                    data: [],
+                                    backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                    borderWidth: 1,
+                                    barThickness: 30,
+                                    
+                                },
+                    ]
+                    },
+                    options: {
+                            plugins: {
+                            legend: {
+                                labels: {
+                                    font: {
+                                        size: 20,
+                                        weight:"bold"
+                                    }
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: key, // Specify your header text here
+                                font: {
+                                size: 20, // Adjust the font size as needed
+                                // weight: 'bold', // Specify the font weight
+                                },
+                            },
+                            },
+                        scales: 
+                        {
+                        x: {
+                            stacked: true, 
+                            ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            stacked: true,
+                            ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            },
+                        }
+                        }
+                    }
+                });
+
+                
+            }
+            }
+        }
+    
+    var create_chart_vanna=function(data){
+    var keysList = Object.keys(data);
+    for (var i=0;i<keysList.length;i++){
+        var key=keysList[i]
+        var value=data[key]
+        var chartId = key+'vanna_bar';
+        var existingChart = Chart.getChart(chartId);
+        if (existingChart) {
+        console.log(value[0])
+        existingChart.data.labels=value[0]
+        existingChart.data.datasets[0].data = value[1];
+        existingChart.data.datasets[1].data = value[2];
+        existingChart.update()
+        }
+        else{
+            var chartContainer = document.getElementById("chartContainer_vanna");
+            var newChartDiv = document.createElement("div");
+            newChartDiv.classList.add("flex-item");
+            var newChartId =chartId // Generate a unique ID for the new chart
+            newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+            chartContainer.appendChild(newChartDiv);
+            
+
+            var ctx = document.getElementById(chartId)
+            var barChart=new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                                {
+                                label: 'call',
+                                data: [],
+                                backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                borderWidth: 3,
+                                barThickness: 20,
+                                },
+
+                                {
+                                label: 'put',
+                                data: [],
+                                backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                borderWidth: 1,
+                                barThickness: 20,
+                            },
+                ]
+                },
+                options: {
+                    plugins: {
+                        legend: {
+                            labels: {
+                                font: {
+                                    size: 20,
+                                    weight:"bold"
+                                }
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: key, // Specify your header text here
+                            font: {
+                            size: 20, // Adjust the font size as needed
+                            // weight: 'bold', // Specify the font weight
+                            },
+                        },
+                        },
+                    scales: {
+                    x: {stacked: true,
+                        ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            }
+                    
+                    },
+                    y: {
+                        beginAtZero: true,
+                        stacked: true,
+                        ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            },
+                    }
+                    }
+                }
+            });
+
+            
+        }
+        }
+    }
+
+
+    var create_chart_profile_vanna=function(data){
+    var keysList = Object.keys(data);
+    for (var i=0;i<keysList.length;i++){
+        var key=keysList[i]
+        var value=data[key]
+        console.log('key',key)
+        console.log('value',value)
+
+        var chartId = key+'vanna_profile_chart';
+        var existingChart = Chart.getChart(chartId);
+        if (existingChart) {
+        existingChart.data.labels=value[0]
+        existingChart.data.datasets[0].data = value[1];
+        existingChart.data.datasets[1].data = value[2];
+        existingChart.update()
+        }
+        else{
+            var chartContainer = document.getElementById("chartContainerProfile_vanna");
+            var newChartDiv = document.createElement("div");
+            newChartDiv.classList.add("flex-item");
+            var newChartId =chartId // Generate a unique ID for the new chart
+            newChartDiv.innerHTML = '<canvas id="' + newChartId + '"></canvas>';
+            chartContainer.appendChild(newChartDiv);
+            
+
+            var ctx_profile = document.getElementById(chartId)
+            var barChart=new Chart(ctx_profile, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                                {
+                                label: 'call',
+                                data: [],
+                                backgroundColor:['rgba(0, 0, 128, 0.5)', ],
+                                borderWidth: 2,
+                                borderColor:['rgba(0, 0, 128, 0.5)', ],
+                                lineThickness: 5,
+                                pointRadius: 0, // Remove the data points
+                                pointHoverRadius: 0, 
+                                },
+
+                                {
+                                label: 'put',
+                                data: [],
+                                backgroundColor:['rgba(255, 140, 0, 0.5)',],
+                                borderColor:['rgba(255, 140, 0, 0.5)',],
+                                borderWidth: 2,
+                                lineThickness: 5,
+                                pointRadius: 0, // Remove the data points
+                                pointHoverRadius: 0, 
+                            },
+                ]
+                },
+                options: {
+                    plugins: {
+                        legend: {
+                            labels: {
+                                font: {
+                                    size: 20,
+                                    weight:"bold"
+                                }
+                            }
+                        },
+                        
+                        title: {
+                            display: true,
+                            text: key, // Specify your header text here
+                            font: {
+                            size: 20, // Adjust the font size as needed
+                            weight: 'bold', // Specify the font weight
+                            },
+                        },
+                        },
+                    scales: {
+                    x: {
+                        stacked: true,
+                        ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            },
+                       
+                        },
+                    y: {
+                        beginAtZero: true,
+                        stacked: true,
+                        ticks: 
+                            {
+                                font: {
+                                    size: 20 ,
+                                    // weight: "bold"
+                                }
+                            },
+                    }
+                    }
+                }
+            });
+
+            
+        }
+        }
+    }
+    
+
+</script>
+
+
+<script>
+            var client_id = Date.now()
+            var ws = new WebSocket(`ws://localhost:8000/ws/${client_id}`);
+            var price_table=null;
+            var greek_table=null;
+            var iv_table=null;
+
+            ws.onmessage = function(event) {
+                const data=JSON.parse(event.data);
+                
+                if(!price_table){
+                    create_price_table(data.table_data);
+                }
+                else{
+                    update_price_table(data.table_data);
+                }
+
+                if(!greek_table){
+                    create_greek_table(data.table_data);
+                }
+                else{
+                    update_greek_table(data.table_data);
+                }
+
+                if(!iv_table){
+                    create_iv_table(data.table_data);
+                }
+                else{
+                    update_iv_table(data.table_data);
+                }
+                
+
+            };
+
+            var create_price_table = function(table_data){
+                    price_table = $('#priceTable').DataTable({
+                                        "ordering": true,
+                                        "data": table_data,
+                                        "bPaginate": false,
+                                        "bLengthChange": true,
+                                        "bFilter": true,
+                                        "bInfo": false,
+                                        "bAutoWidth": true,
+                                        "order": [],
+                                        "columns": [
+                                        
+                                      
+                                        {'data':'time', 'title':'time'},
+                                        {'data':'delta','title':'delta'},
+                                        {'data':'expiry', 'title':'expiry'},
+                                        {'data':'localSymbol', 'title':'symbol'},
+
+                                        {'data':'call_spread', 'title':'call_spread'},
+                                        {'data':'put_spread', 'title':'put_spread'},
+
+                                        {'data':'avg_vol_14', 'title':'avg_vol_14'},
+
+                                        {'data':'call_open_%', 'title':'call_open_%'},
+                                        {'data':'call_close_%', 'title':'call_close_%'},
+                                        {'data':'put_open_%', 'title':'put_open_%'},
+                                        {'data':'put_close_%', 'title':'put_close_%'},
+
+                                        {'data':'max_pain', 'title':'max_pain'},
+                                        {'data':'min_pain', 'title':'min_pain'},
+                                        {'data':'OI/R', 'title':'OI/R'},
+                                        {'data':'OI/S', 'title':'OI/S'},
+                                        {'data':'P/C Volume', 'title':'P/C Volume'},
+
+
+                        
+                                        
+                                        
+                                        
+                                        ], 
+                                        
+                    });
+                }
+
+                var update_price_table = function(table_data){
+                    price_table.clear();
+                    price_table.rows.add(table_data);
+                    price_table.draw(false);
+                }
+
+
+
+            var create_greek_table = function(table_data){
+                    greek_table = $('#greekTable').DataTable({
+                                        "ordering": true,
+                                        "data": table_data,
+                                        "bPaginate": false,
+                                        "bLengthChange": true,
+                                        "bFilter": true,
+                                        "bInfo": false,
+                                        "bAutoWidth": true,
+                                        "order": [],
+                                        "columns": [
+                                        
+                                      
+                                        {'data':'time', 'title':'time'},
+                                        {'data':'delta','title':'delta'},
+                                        {'data':'expiry', 'title':'expiry'},
+                                        {'data':'localSymbol', 'title':'symbol'},
+
+
+                                        {'data':'call_volatility', 'title':'call_volatility'},
+                                        {'data':'put_volatility', 'title':'put_volatility'},
+                                        {'data':'call_beta', 'title':'call_beta'},
+                                        {'data':'put_beta', 'title':'put_beta'},
+                                        {'data':'call_lvg', 'title':'call_lvg'},
+                                        {'data':'put_lvg', 'title':'put_lvg'},
+
+
+
+                                        
+                                        {'data':'call/vanna', 'title':'call/vanna'},
+                                        {'data':'put/vanna', 'title':'put/vanna'},
+                                        {'data':'call/charm', 'title':'call/charm'},
+                                        {'data':'put/charm', 'title':'put/charm'},
+                                        
+                                        
+            
+                                        
+                                        {'data':'gamma/C', 'title':'gamma/C'},
+                                        {'data':'gamma/P', 'title':'gamma/P'},
+                                        
+                                        
+                                        
+                                        
+                                        ], 
+                                        
+                    });
+                }
+
+                var update_greek_table = function(table_data){
+                    greek_table.clear();
+                    greek_table.rows.add(table_data);
+                    greek_table.draw(false);
+                }
+
+
+            var create_iv_table = function(table_data){
+                    iv_table = $('#ivTable').DataTable({
+                                        "ordering": true,
+                                        "data": table_data,
+                                        "bPaginate": false,
+                                        "bLengthChange": true,
+                                        "bFilter": true,
+                                        "bInfo": false,
+                                        "bAutoWidth": true,
+                                        "order": [],
+                                        "columns": [
+                                        
+                                      
+                                        {'data':'time', 'title':'time'},
+                                        {'data':'delta','title':'delta'},
+                                        {'data':'expiry', 'title':'expiry'},
+                                        {'data':'localSymbol', 'title':'symbol'},
+
+
+                                        {'data':'hv-iv', 'title':'hv-iv'},
+                                        {'data':'RR', 'title':'RR'},
+                                        {'data':'avg_RR_14', 'title':'avg_RR_14'},
+                                        {'data':'avg_c_IV', 'title':'avg_c_IV'},
+                                        {'data':'avg_p_IV', 'title':'avg_p_IV'},
+                                        {'data':'RR 14 DAYS', 'title':'RR AT 14 DAYS'},
+                                        {'data':'RR TODAY', 'title':'RR TODAY'},
+                                        {'data':'RR_iv_ratio', 'title':'RR_iv_ratio'},
+                                        
+                                        
+                                        
+                                        ], 
+                                        
+                    });
+                }
+
+                var update_iv_table = function(table_data){
+                    iv_table.clear();
+                    iv_table.rows.add(table_data);
+                    iv_table.draw(false);
+                }
+
+</script>
+
+
+</body>
+</html>

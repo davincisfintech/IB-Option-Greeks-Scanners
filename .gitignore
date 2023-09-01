@@ -1,0 +1,6 @@
+venv
+.idea
+logs
+ibapi
+test_samples
+test.py
